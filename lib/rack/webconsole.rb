@@ -23,7 +23,7 @@ module Rack
   # variables and giving a true IRB-esque experience.
   #
   class Webconsole
-    @@config = {:inject_jquery => false, :key_code => "96"}
+    @@config = {}
 
     class << self
       # Returns whether the Asset injecter must inject JQuery or not.
@@ -57,6 +57,10 @@ module Rack
         @@config[:key_code] = value
       end
     end
+
+    # Sets default values.
+    Webconsole.inject_jquery = false
+    Webconsole.key_code = 96
 
     # Honor the Rack contract by saving the passed Rack application in an ivar.
     #
