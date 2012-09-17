@@ -10,6 +10,11 @@ module Rack
       @webconsole.instance_variable_get(:@app).must_equal @app
     end
 
+    it 'initializes config' do
+      Webconsole.inject_jquery.must_equal false
+      Webconsole.key_code.must_equal "[96]"
+    end
+
     describe "#call" do
       it 'delegates the call to the Repl middleware when the path is /webconsole' do
         @app = stub
