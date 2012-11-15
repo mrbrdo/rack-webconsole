@@ -24,6 +24,8 @@ module Rack
       # @param [Hash] env a Rack request environment.
       def call(env)
         status, headers, response = @app.call(env)
+        response.extend(ResponseMethods)
+        
         return [status, headers, response] unless check_html?(headers, response) && status == 200
 
         if response.respond_to?(:body)
@@ -69,5 +71,14 @@ module Rack
           body =~ %r{<html.*</html>}m
       end
     end
+  
+    module ResponseMethods
+      def first
+        obj = nil
+        self.each { |e| obj = e; break }
+        obj
+      end
+    end
+  
   end
 end
