@@ -12,76 +12,73 @@ module Rack
     end
 
     describe "#call" do
-      it 'evaluates the :query param in a sandbox and returns the result' do
-        @app = lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] }
-        env = {}
-        Webconsole::Repl.stubs(:token_valid?).returns(true)
-        request = OpenStruct.new(:params => {'query' => 'a = 4; a * 2'}, :post? => true)
+      let(:app) { lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] } }
+      let(:repl) { Webconsole::Repl.new(app) }
+      before(:each) do
+        @app = app
+      end
+      let(:environment) { {} }
+      let(:use_post) { true }
+
+      # sends input query using the webconsole, returning the response
+      # query: The pry input to use
+      # token:(optional) The authentication token
+      def response_to(query, token = nil)
+        params = {'query' => query }
+        params['token'] = token if token
+        request = OpenStruct.new(:params => params, :post? => use_post)
         Rack::Request.stubs(:new).returns request
-
-        @repl = Webconsole::Repl.new(@app)
-
-        response = @repl.call(env).last.first
-
-        MultiJson.load(response)['result'].must_include "8" # include because of coloring characters
+        repl.call(environment)
       end
 
-      it 'maintains local state in subsequent calls thanks to an evil global variable' do
-        @app = lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] }
-        env = {}
-        Webconsole::Repl.stubs(:token_valid?).returns(true)
-        request = OpenStruct.new(:params => {'query' => 'a = 4'}, :post? => true)
-        Rack::Request.stubs(:new).returns request
-        @repl = Webconsole::Repl.new(@app)
-
-        @repl.call(env) # call 1 sets a to 4
-
-        request = OpenStruct.new(:params => {'query' => 'a * 8', 'token' => 'abc'}, :post? => true)
-        Rack::Request.stubs(:new).returns request
-
-        response = @repl.call(env).last.first # call 2 retrieves a and multiplies it by 8
-
-        MultiJson.decode(response)['result'].must_include "32" # include because of coloring characters
+      # same as send_input, but extracts the result out of the query
+      def query(input, token = nil)
+        response = response_to(input, token)
+        MultiJson.load(response.last.first)['result']
       end
 
-      it "returns any found errors prepended with 'Error:'" do
-        @app = lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] }
-        env = {}
-        Webconsole::Repl.stubs(:token_valid?).returns(true)
-        request = OpenStruct.new(:params => {'query' => 'unknown_method'}, :post? => true)
-        Rack::Request.stubs(:new).returns request
-        @repl = Webconsole::Repl.new(@app)
-
-        response = @repl.call(env).last.first
-
-        MultiJson.decode(response)['result'].must_match /Error:/
+      def with_token(token)
+        Webconsole::Repl.class_variable_set(:@@tokens, {token => Time.now + 30 * 60})
       end
 
-      it 'rejects non-post requests' do
-        @app = lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] }
-        env = {}
-        Webconsole::Repl.stubs(:token).returns('abc')
-        request = OpenStruct.new(:params => {'query' => 'unknown_method', 'token' => 'abc'}, :post? => false)
-        Rack::Request.stubs(:new).returns request
-        @repl = Webconsole::Repl.new(@app)
-
-        $sandbox.expects(:instance_eval).never
-
-        @repl.call(env).must_equal @app.call(env)
+      it 'handles a request with a correct token' do
+        with_token('abc')
+        response_to('unknown_method', 'abc').wont_equal app.call(environment)
       end
 
-      it 'rejects requests with invalid token' do
-        @app = lambda { |env| [200, {'Content-Type' => 'text/plain'}, ['hello world']] }
-        env = {}
-        Webconsole::Repl.stubs(:token).returns('abc')
-        request = OpenStruct.new(:params => {'query' => 'unknown_method', 'token' => 'cba'}, :post? => true)
-        Rack::Request.stubs(:new).returns request
-        @repl = Webconsole::Repl.new(@app)
-
-        $sandbox.expects(:instance_eval).never
-
-        @repl.call(env).must_equal @app.call(env)
+      it 'rejects a request with an invalid token' do
+        with_token('abc')
+        response_to('unknown_method', 'cba').must_equal app.call(environment)
       end
+
+      describe "with a valid token" do
+        before(:each) do
+          Webconsole::Repl.stubs(:token_valid?).returns(true)
+        end
+
+        it 'evaluates the :query param in a sandbox and returns the result' do
+          query('a = 4; a * 2').must_include "8"
+        end
+
+        it 'maintains local state in subsequent calls thanks to an evil global variable' do
+          query('a = 4')
+          query('a * 8').must_include "32"
+        end
+
+        it "returns any found errors prepended with 'Error:'" do
+          query('unknown_method').must_match /Error:/
+        end
+      end
+
+      describe "with non-post requests" do
+        let(:use_post) { false }
+        it "rejects the request" do
+          with_token('abc')
+          response = response_to('unknown_method', 'abc')
+          response.must_equal app.call(environment)
+        end
+      end
+
     end
 
     describe 'class methods' do
