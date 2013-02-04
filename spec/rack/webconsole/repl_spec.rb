@@ -38,7 +38,7 @@ module Rack
       end
 
       def with_token(token)
-        Webconsole::Repl.class_variable_set(:@@tokens, {token => Time.now + 30 * 60})
+        Webconsole::Repl.send(:class_variable_set, :@@tokens, {token => Time.now + 30 * 60})
       end
 
       it 'handles a request with a correct token' do
