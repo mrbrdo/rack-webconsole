@@ -60,6 +60,29 @@ module Rack
           query('a = 4; a * 2').must_include "8"
         end
 
+        it 'displays data sent to stdout' do
+          query('puts "hello world"').must_include "hello world"
+        end
+
+        it 'displays data sent to stderr' do
+          query('warn "Warning"').must_include "Warning"
+        end
+
+        it 'displays data sent to stdout after a delay' do
+          query('.sleep 0.5; echo command output').must_include 'command output'
+        end
+
+        it "Outputs the result of the computation after an stdout data" do
+          output = query('puts "stdout";"result"')
+          result_loc = output.match("result").begin(0)
+          stdout_loc = output.match("stdout").begin(0)
+          (stdout_loc < result_loc).must_equal true
+        end
+
+        it 'displays stdout data from external processes' do
+          query('.echo command output').must_include 'command output'
+        end
+
         it 'maintains local state in subsequent calls thanks to an evil global variable' do
           query('a = 4')
           query('a * 8').must_include "32"
