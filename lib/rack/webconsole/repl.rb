@@ -86,6 +86,7 @@ module Rack
         if $pry.nil?
           Pry.pager = false
           $pry = Pry.new(:output => $pry_output, :pager => false)
+          Pry.initial_session_setup
         end
         pry = $pry
         
@@ -135,7 +136,10 @@ module Rack
 
         if got_output
           pry.set_last_result(result, target, code)
-          pry.show_result(result) if pry.should_print?
+          Pry.print.call($pry_output, result) if pry.should_print?
+          # the below line doesn't work well with custom printers
+          # (like awesome_print) for some reason
+          #pry.show_result(result) if pry.should_print?
         end
 
         $pry_output.write(error_out) if error_out
